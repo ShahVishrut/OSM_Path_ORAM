@@ -187,6 +187,20 @@ void Client::write_data(uint64_t key, uint64_t value) {
             }
         }
     }
+    for (int index = avl_history.size() - 1; index >= 0; index--) { 
+        uint32_t new_leaf_label = write_block(avl_history[index], true).header.leaf_label;
+        if (index > 0 && avl_history[index - 1].data.l_child_ptr.block_id == avl_history[index].header.block_id) {
+            avl_history[index - 1].data.l_child_ptr.leaf_label = new_leaf_label;
+        } else if (index > 0 && avl_history[index - 1].data.r_child_ptr.block_id == avl_history[index].header.block_id) {
+            avl_history[index - 1].data.r_child_ptr.leaf_label = new_leaf_label;
+        } else if (index > 1 && avl_history[index - 2].data.l_child_ptr.block_id == avl_history[index].header.block_id) {
+            avl_history[index - 2].data.l_child_ptr.leaf_label = new_leaf_label;
+        } else if (index > 1 && avl_history[index - 2].data.r_child_ptr.block_id == avl_history[index].header.block_id) {
+            avl_history[index - 2].data.r_child_ptr.leaf_label = new_leaf_label;
+        } else if (index == 0) {
+            root.leaf_label = new_leaf_label;
+        }
+    }
 }
 
 ORAMBlock Client::write_block(ORAMBlock to_write, bool write) {
