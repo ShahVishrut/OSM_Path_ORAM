@@ -50,7 +50,6 @@ private:
     size_t tree_height;
     std::vector<ORAMBlock> stash;
     std::vector<bool> stash_full;
-    std::vector<ORAMBlock> avl_history;
     Server* server;
     void evict(uint32_t leaf_num);
     bool is_on_path(size_t index, size_t leaf_num);

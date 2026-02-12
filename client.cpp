@@ -7,6 +7,8 @@
 #include <cstring>
 #include <cstdint>
 #include <array>
+#include <iostream>
+#include <iomanip>
 
 
 Client::Client(size_t num_blocks, size_t blocks_per_bucket) {
@@ -22,6 +24,15 @@ Client::Client(size_t num_blocks, size_t blocks_per_bucket) {
     
     stash.resize(3 * (tree_height + 1));
     stash_full.resize(stash.size());
+
+    ORAMBlock dummy;
+    std::vector<uint8_t> data(bucket_size_bytes);
+    for (size_t j = 0; j < blocks_per_bucket; j++) {
+        std::memcpy(&data[j * block_size_bytes], &dummy, block_size_bytes);
+    }
+    for (size_t i = 1; i < (1u << (tree_height + 1)); i++) {
+        server->write_buckets({i}, data);
+    }
 }
 
 
@@ -35,6 +46,8 @@ void Client::write_data(uint64_t key, uint64_t value) {
         root = write_block(to_write, true).header;
         return;
     }
+
+    std::vector<ORAMBlock> avl_history;
 
     ORAMBlock cur_read;
     cur_read.header = root;
@@ -75,7 +88,66 @@ void Client::write_data(uint64_t key, uint64_t value) {
                 cur_read.header = cur_read.data.l_child_ptr;
             }
         }
+           // --- DEBUG PRINT START ---
+std::cout << "\n=== AVL HISTORY DUMP (" << avl_history.size() << " blocks) ===\n";
+for (size_t i = 0; i < avl_history.size(); i++) {
+    const auto& block = avl_history[i];
+    const auto& node = block.data;
+    
+    std::cout << "Index [" << i << "] "
+              << "BlockID: " << block.header.block_id 
+              << " | Leaf: " << block.header.leaf_label
+              << " | " << (block.header.is_null ? "NULL_BLOCK" : "VALID") 
+              << "\n";
+
+    if (!block.header.is_null) {
+        std::cout << "  Key: " << node.key << " | Val: " << node.value << "\n";
+        
+        std::cout << "  L_Child: " 
+                  << (node.l_child_ptr.is_null ? "NULL" : std::to_string(node.l_child_ptr.block_id))
+                  << " (Leaf: " << node.l_child_ptr.leaf_label << ")"
+                  << " | Height: " << (int)node.l_height << "\n";
+                  
+        std::cout << "  R_Child: " 
+                  << (node.r_child_ptr.is_null ? "NULL" : std::to_string(node.r_child_ptr.block_id))
+                  << " (Leaf: " << node.r_child_ptr.leaf_label << ")"
+                  << " | Height: " << (int)node.r_height << "\n";
     }
+    std::cout << "--------------------------------------\n";
+}
+std::cout << "======================================\n\n";
+// --- DEBUG PRINT END ---
+    }
+
+    // --- DEBUG PRINT START ---
+std::cout << "\n=== AVL HISTORY DUMP (" << avl_history.size() << " blocks) ===\n";
+for (size_t i = 0; i < avl_history.size(); i++) {
+    const auto& block = avl_history[i];
+    const auto& node = block.data;
+    
+    std::cout << "Index [" << i << "] "
+              << "BlockID: " << block.header.block_id 
+              << " | Leaf: " << block.header.leaf_label
+              << " | " << (block.header.is_null ? "NULL_BLOCK" : "VALID") 
+              << "\n";
+
+    if (!block.header.is_null) {
+        std::cout << "  Key: " << node.key << " | Val: " << node.value << "\n";
+        
+        std::cout << "  L_Child: " 
+                  << (node.l_child_ptr.is_null ? "NULL" : std::to_string(node.l_child_ptr.block_id))
+                  << " (Leaf: " << node.l_child_ptr.leaf_label << ")"
+                  << " | Height: " << (int)node.l_height << "\n";
+                  
+        std::cout << "  R_Child: " 
+                  << (node.r_child_ptr.is_null ? "NULL" : std::to_string(node.r_child_ptr.block_id))
+                  << " (Leaf: " << node.r_child_ptr.leaf_label << ")"
+                  << " | Height: " << (int)node.r_height << "\n";
+    }
+    std::cout << "--------------------------------------\n";
+}
+std::cout << "======================================\n\n";
+// --- DEBUG PRINT END ---
 
     for (int height = 1; height < avl_history.size(); height++) {
         int cur_node_index = avl_history.size() - 1 - height;
@@ -234,6 +306,7 @@ ORAMBlock Client::write_block(ORAMBlock to_write, bool write) {
                     stash[i] = to_write;
                     stash[i].header.leaf_label = distr(gen);
                     stash_full[i] = true;
+                    to_write = stash[i];
                     break;
                 }
             }
