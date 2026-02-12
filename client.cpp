@@ -106,7 +106,7 @@ void Client::write_data(uint64_t key, uint64_t value) {
                 if (cur_node_index == 0) {
                     root = avl_history[cur_node_index].header;
                 } else {
-                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) { // Use index_GP for the seq check
+                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
                         avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
                     } else {
                         avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
@@ -126,7 +126,59 @@ void Client::write_data(uint64_t key, uint64_t value) {
                 if (cur_node_index == 0) {
                     root = avl_history[cur_node_index].header;
                 } else {
-                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) { // Use index_GP for the seq check
+                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
+                        avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
+                    } else {
+                        avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
+                    }
+                }
+            } else if (child_is_right && !grandchild_is_right) {
+                avl_history[cur_node_index].data.r_child_ptr = avl_history[cur_node_index + 2].data.l_child_ptr;
+                avl_history[cur_node_index].data.r_height = avl_history[cur_node_index + 2].data.l_height;
+
+                avl_history[cur_node_index + 1].data.l_child_ptr = avl_history[cur_node_index + 2].data.r_child_ptr;
+                avl_history[cur_node_index + 1].data.l_height = avl_history[cur_node_index + 2].data.r_height;
+
+                avl_history[cur_node_index + 2].data.l_child_ptr = avl_history[cur_node_index].header;
+                avl_history[cur_node_index + 2].data.l_height = 1 + std::max(avl_history[cur_node_index].data.l_height, avl_history[cur_node_index].data.r_height);
+
+                avl_history[cur_node_index + 2].data.r_child_ptr = avl_history[cur_node_index+1].header;
+                avl_history[cur_node_index + 2].data.r_height = 1 + std::max(avl_history[cur_node_index + 1].data.l_height, avl_history[cur_node_index + 1].data.r_height);
+
+                ORAMBlock swap = avl_history[cur_node_index + 2];
+                avl_history[cur_node_index + 2] = avl_history[cur_node_index];
+                avl_history[cur_node_index] = swap;
+
+                if (cur_node_index == 0) {
+                    root = avl_history[cur_node_index].header;
+                } else {
+                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id) {
+                        avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
+                    } else {
+                        avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
+                    }
+                }
+            } else {
+                avl_history[cur_node_index].data.l_child_ptr = avl_history[cur_node_index + 2].data.r_child_ptr;
+                avl_history[cur_node_index].data.l_height = avl_history[cur_node_index + 2].data.r_height;
+
+                avl_history[cur_node_index + 1].data.r_child_ptr = avl_history[cur_node_index + 2].data.l_child_ptr;
+                avl_history[cur_node_index + 1].data.r_height = avl_history[cur_node_index + 2].data.l_height;
+
+                avl_history[cur_node_index + 2].data.r_child_ptr = avl_history[cur_node_index].header;
+                avl_history[cur_node_index + 2].data.r_height = 1 + std::max(avl_history[cur_node_index].data.l_height, avl_history[cur_node_index].data.r_height);
+
+                avl_history[cur_node_index + 2].data.l_child_ptr = avl_history[cur_node_index+1].header;
+                avl_history[cur_node_index + 2].data.l_height = 1 + std::max(avl_history[cur_node_index + 1].data.l_height, avl_history[cur_node_index + 1].data.r_height);
+
+                ORAMBlock swap = avl_history[cur_node_index + 2];
+                avl_history[cur_node_index + 2] = avl_history[cur_node_index];
+                avl_history[cur_node_index] = swap;
+
+                if (cur_node_index == 0) {
+                    root = avl_history[cur_node_index].header;
+                } else {
+                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id) {
                         avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
                     } else {
                         avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
