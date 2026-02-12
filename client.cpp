@@ -38,7 +38,6 @@ void Client::write_data(uint64_t key, uint64_t value) {
 
     ORAMBlock cur_read;
     cur_read.header = root;
-    std::vector<char> seq;
     
     // 1. Read Path and Append New Node
     while (true) {
@@ -46,7 +45,6 @@ void Client::write_data(uint64_t key, uint64_t value) {
         avl_history.push_back(cur_read);
         
         if (key > cur_read.data.key) {
-            seq.push_back('R');
             if (cur_read.data.r_child_ptr.is_null) {
                 ORAMBlock to_write;
                 to_write.header.block_id = next_available_block_id();
@@ -62,7 +60,6 @@ void Client::write_data(uint64_t key, uint64_t value) {
                 cur_read.header = cur_read.data.r_child_ptr;
             }
         } else {
-            seq.push_back('L');
             if (cur_read.data.l_child_ptr.is_null) {
                 ORAMBlock to_write;
                 to_write.header.block_id = next_available_block_id();
@@ -80,65 +77,59 @@ void Client::write_data(uint64_t key, uint64_t value) {
         }
     }
 
-    // 2. Traverse Upwards: Update Heights and Rebalance
     for (int height = 1; height < avl_history.size(); height++) {
-        int index_A = avl_history.size() - 1 - height; // Parent (Unbalanced Candidate)
-        int index_B = avl_history.size() - height;     // Child
+        int cur_node_index = avl_history.size() - 1 - height;
         
-        // Update Height for Node A
-        if (seq[seq.size() - height] == 'R') {
-            avl_history[index_A].data.r_height = 1 + std::max(avl_history[index_B].data.l_height, avl_history[index_B].data.r_height);
+        if (avl_history[cur_node_index].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
+            avl_history[cur_node_index].data.r_height = 1 + std::max(avl_history[cur_node_index + 1].data.l_height, avl_history[cur_node_index + 1].data.r_height);
         } else {
-            avl_history[index_A].data.l_height = 1 + std::max(avl_history[index_B].data.l_height, avl_history[index_B].data.r_height);
+            avl_history[cur_node_index].data.l_height = 1 + std::max(avl_history[cur_node_index + 1].data.l_height, avl_history[cur_node_index + 1].data.r_height);
         }
 
-        // Check Balance Factor
-        int balance_factor = avl_history[index_A].data.r_height - avl_history[index_A].data.l_height;
+        int balance_factor = avl_history[cur_node_index].data.r_height - avl_history[cur_node_index].data.l_height;
 
         if (std::abs(balance_factor) > 1) {
-            // Check for RR Case: Right heavy parent, Right heavy (or neutral) child
-            // Note: We check 'seq' to see if the insertion happened on the Right side
-            bool child_is_right = (seq[seq.size() - height] == 'R');
-            bool grandchild_is_right = (seq.size() - height + 1 < seq.size()) && (seq[seq.size() - height + 1] == 'R');
+            bool child_is_right = (avl_history[cur_node_index].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id);
+            bool grandchild_is_right = (avl_history[cur_node_index + 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id);
 
             if (child_is_right && grandchild_is_right) {
-                
-                // --- Step 1: Pointer & Height Updates (Standard AVL) ---
-                
-                // A adopts B's left child
-                avl_history[index_A].data.r_child_ptr = avl_history[index_B].data.l_child_ptr;
-                // A's right height becomes B's left height
-                avl_history[index_A].data.r_height = avl_history[index_B].data.l_height;
+                avl_history[cur_node_index].data.r_child_ptr = avl_history[cur_node_index + 1].data.l_child_ptr;
+                avl_history[cur_node_index].data.r_height = avl_history[cur_node_index + 1].data.l_height;
 
-                // B adopts A (A becomes Left child of B)
-                avl_history[index_B].data.l_child_ptr = avl_history[index_A].header;
-                // Recalculate B's left height (based on A's new height)
-                avl_history[index_B].data.l_height = 1 + std::max(
-                    avl_history[index_A].data.l_height, 
-                    avl_history[index_A].data.r_height
-                );
+                avl_history[cur_node_index + 1].data.l_child_ptr = avl_history[cur_node_index].header;
+                avl_history[cur_node_index + 1].data.l_height = 1 + std::max(avl_history[cur_node_index].data.l_height, avl_history[cur_node_index].data.r_height);
+         
+                ORAMBlock swap = avl_history[cur_node_index + 1];
+                avl_history[cur_node_index + 1] = avl_history[cur_node_index];
+                avl_history[cur_node_index] = swap;
 
-                // --- Step 2: Swap in History Vector (For Write-Back Order) ---
-                // We swap so the new parent (B) is 'above' the new child (A) in the vector
-                ORAMBlock swap = avl_history[index_B];
-                avl_history[index_B] = avl_history[index_A];
-                avl_history[index_A] = swap;
-                
-                // NOTE: After swap:
-                // index_A contains Node B (The new Subtree Root)
-                // index_B contains Node A (The new Child)
-
-                // --- Step 3: Update Grandparent Pointer ---
-                if (index_A == 0) {
-                    // A was the root. Now B (at index_A) is the root.
-                    this->root = avl_history[index_A].header;
+                if (cur_node_index == 0) {
+                    root = avl_history[cur_node_index].header;
                 } else {
-                    int index_GP = index_A - 1;
-                    // Check if Grandparent pointed Right or Left to get to A
-                    if (seq[index_GP] == 'R') { // Use index_GP for the seq check
-                        avl_history[index_GP].data.r_child_ptr = avl_history[index_A].header;
+                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) { // Use index_GP for the seq check
+                        avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
                     } else {
-                        avl_history[index_GP].data.l_child_ptr = avl_history[index_A].header;
+                        avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
+                    }
+                }
+            } else if (!child_is_right && !grandchild_is_right) {
+                avl_history[cur_node_index].data.l_child_ptr = avl_history[cur_node_index + 1].data.r_child_ptr;
+                avl_history[cur_node_index].data.l_height = avl_history[cur_node_index + 1].data.r_height;
+
+                avl_history[cur_node_index + 1].data.r_child_ptr = avl_history[cur_node_index].header;
+                avl_history[cur_node_index + 1].data.r_height = 1 + std::max(avl_history[cur_node_index].data.l_height, avl_history[cur_node_index].data.r_height);
+         
+                ORAMBlock swap = avl_history[cur_node_index + 1];
+                avl_history[cur_node_index + 1] = avl_history[cur_node_index];
+                avl_history[cur_node_index] = swap;
+
+                if (cur_node_index == 0) {
+                    root = avl_history[cur_node_index].header;
+                } else {
+                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) { // Use index_GP for the seq check
+                        avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
+                    } else {
+                        avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
                     }
                 }
             }
