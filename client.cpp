@@ -115,7 +115,6 @@ for (size_t i = 0; i < avl_history.size(); i++) {
     }
     std::cout << "--------------------------------------\n";
 }
-std::cout << "======================================\n\n";
 // --- DEBUG PRINT END ---
     }
 
@@ -146,13 +145,12 @@ for (size_t i = 0; i < avl_history.size(); i++) {
     }
     std::cout << "--------------------------------------\n";
 }
-std::cout << "======================================\n\n";
 // --- DEBUG PRINT END ---
 
     for (int height = 1; height < avl_history.size(); height++) {
         int cur_node_index = avl_history.size() - 1 - height;
         
-        if (avl_history[cur_node_index].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
+        if (!avl_history[cur_node_index].data.r_child_ptr.is_null && avl_history[cur_node_index].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
             avl_history[cur_node_index].data.r_height = 1 + std::max(avl_history[cur_node_index + 1].data.l_height, avl_history[cur_node_index + 1].data.r_height);
         } else {
             avl_history[cur_node_index].data.l_height = 1 + std::max(avl_history[cur_node_index + 1].data.l_height, avl_history[cur_node_index + 1].data.r_height);
@@ -161,8 +159,12 @@ std::cout << "======================================\n\n";
         int balance_factor = avl_history[cur_node_index].data.r_height - avl_history[cur_node_index].data.l_height;
 
         if (std::abs(balance_factor) > 1) {
-            bool child_is_right = (avl_history[cur_node_index].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id);
-            bool grandchild_is_right = (avl_history[cur_node_index + 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id);
+            
+            bool child_is_right = (!avl_history[cur_node_index].data.r_child_ptr.is_null && 
+                                avl_history[cur_node_index].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id);
+
+            bool grandchild_is_right = (!avl_history[cur_node_index + 1].data.r_child_ptr.is_null && 
+                                        avl_history[cur_node_index + 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id);
 
             if (child_is_right && grandchild_is_right) {
                 avl_history[cur_node_index].data.r_child_ptr = avl_history[cur_node_index + 1].data.l_child_ptr;
@@ -178,7 +180,7 @@ std::cout << "======================================\n\n";
                 if (cur_node_index == 0) {
                     root = avl_history[cur_node_index].header;
                 } else {
-                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
+                    if (!avl_history[cur_node_index - 1].data.r_child_ptr.is_null && avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
                         avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
                     } else {
                         avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
@@ -198,7 +200,7 @@ std::cout << "======================================\n\n";
                 if (cur_node_index == 0) {
                     root = avl_history[cur_node_index].header;
                 } else {
-                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
+                    if (!avl_history[cur_node_index - 1].data.r_child_ptr.is_null && avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 1].header.block_id) {
                         avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
                     } else {
                         avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
@@ -224,7 +226,7 @@ std::cout << "======================================\n\n";
                 if (cur_node_index == 0) {
                     root = avl_history[cur_node_index].header;
                 } else {
-                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id) {
+                    if (!avl_history[cur_node_index - 1].data.r_child_ptr.is_null && avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id) {
                         avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
                     } else {
                         avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
@@ -250,7 +252,7 @@ std::cout << "======================================\n\n";
                 if (cur_node_index == 0) {
                     root = avl_history[cur_node_index].header;
                 } else {
-                    if (avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id) {
+                    if (!avl_history[cur_node_index - 1].data.r_child_ptr.is_null && avl_history[cur_node_index - 1].data.r_child_ptr.block_id == avl_history[cur_node_index + 2].header.block_id) {
                         avl_history[cur_node_index - 1].data.r_child_ptr = avl_history[cur_node_index].header;
                     } else {
                         avl_history[cur_node_index - 1].data.l_child_ptr = avl_history[cur_node_index].header;
@@ -261,15 +263,24 @@ std::cout << "======================================\n\n";
     }
     for (int index = avl_history.size() - 1; index >= 0; index--) { 
         uint32_t new_leaf_label = write_block(avl_history[index], true).header.leaf_label;
-        if (index > 0 && avl_history[index - 1].data.l_child_ptr.block_id == avl_history[index].header.block_id) {
+        
+        if (index > 0 && !avl_history[index - 1].data.l_child_ptr.is_null && 
+            avl_history[index - 1].data.l_child_ptr.block_id == avl_history[index].header.block_id) {
             avl_history[index - 1].data.l_child_ptr.leaf_label = new_leaf_label;
-        } else if (index > 0 && avl_history[index - 1].data.r_child_ptr.block_id == avl_history[index].header.block_id) {
+        } 
+        else if (index > 0 && !avl_history[index - 1].data.r_child_ptr.is_null && 
+                 avl_history[index - 1].data.r_child_ptr.block_id == avl_history[index].header.block_id) {
             avl_history[index - 1].data.r_child_ptr.leaf_label = new_leaf_label;
-        } else if (index > 1 && avl_history[index - 2].data.l_child_ptr.block_id == avl_history[index].header.block_id) {
+        } 
+        else if (index > 1 && !avl_history[index - 2].data.l_child_ptr.is_null && 
+                 avl_history[index - 2].data.l_child_ptr.block_id == avl_history[index].header.block_id) {
             avl_history[index - 2].data.l_child_ptr.leaf_label = new_leaf_label;
-        } else if (index > 1 && avl_history[index - 2].data.r_child_ptr.block_id == avl_history[index].header.block_id) {
+        } 
+        else if (index > 1 && !avl_history[index - 2].data.r_child_ptr.is_null && 
+                 avl_history[index - 2].data.r_child_ptr.block_id == avl_history[index].header.block_id) {
             avl_history[index - 2].data.r_child_ptr.leaf_label = new_leaf_label;
-        } else if (index == 0) {
+        } 
+        else if (index == 0) {
             root.leaf_label = new_leaf_label;
         }
     }
