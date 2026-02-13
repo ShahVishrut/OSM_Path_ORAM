@@ -88,34 +88,6 @@ void Client::write_data(uint64_t key, uint64_t value) {
                 cur_read.header = cur_read.data.l_child_ptr;
             }
         }
-           // --- DEBUG PRINT START ---
-std::cout << "\n=== AVL HISTORY DUMP (" << avl_history.size() << " blocks) ===\n";
-for (size_t i = 0; i < avl_history.size(); i++) {
-    const auto& block = avl_history[i];
-    const auto& node = block.data;
-    
-    std::cout << "Index [" << i << "] "
-              << "BlockID: " << block.header.block_id 
-              << " | Leaf: " << block.header.leaf_label
-              << " | " << (block.header.is_null ? "NULL_BLOCK" : "VALID") 
-              << "\n";
-
-    if (!block.header.is_null) {
-        std::cout << "  Key: " << node.key << " | Val: " << node.value << "\n";
-        
-        std::cout << "  L_Child: " 
-                  << (node.l_child_ptr.is_null ? "NULL" : std::to_string(node.l_child_ptr.block_id))
-                  << " (Leaf: " << node.l_child_ptr.leaf_label << ")"
-                  << " | Height: " << (int)node.l_height << "\n";
-                  
-        std::cout << "  R_Child: " 
-                  << (node.r_child_ptr.is_null ? "NULL" : std::to_string(node.r_child_ptr.block_id))
-                  << " (Leaf: " << node.r_child_ptr.leaf_label << ")"
-                  << " | Height: " << (int)node.r_height << "\n";
-    }
-    std::cout << "--------------------------------------\n";
-}
-// --- DEBUG PRINT END ---
     }
 
     // --- DEBUG PRINT START ---
