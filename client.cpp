@@ -52,7 +52,7 @@ void Client::write_data(uint64_t key, uint64_t value) {
     ORAMBlock cur_read;
     cur_read.header = root;
     
-    // 1. Read Path and Append New Node
+    // Read AVL tree path from PathORAM and add new Node to end
     while (true) {
         cur_read = write_block(cur_read, false);
         avl_history.push_back(cur_read);
@@ -65,7 +65,6 @@ void Client::write_data(uint64_t key, uint64_t value) {
                 to_write.data.key = key;
                 to_write.data.value = value;
                 
-                // Update parent pointer in history
                 avl_history.back().data.r_child_ptr = to_write.header;
                 avl_history.push_back(to_write);
                 break;
@@ -80,7 +79,6 @@ void Client::write_data(uint64_t key, uint64_t value) {
                 to_write.data.key = key;
                 to_write.data.value = value;
                 
-                // Update parent pointer in history
                 avl_history.back().data.l_child_ptr = to_write.header;
                 avl_history.push_back(to_write);
                 break;
@@ -90,35 +88,7 @@ void Client::write_data(uint64_t key, uint64_t value) {
         }
     }
 
-    // --- DEBUG PRINT START ---
-std::cout << "\n=== AVL HISTORY DUMP (" << avl_history.size() << " blocks) ===\n";
-for (size_t i = 0; i < avl_history.size(); i++) {
-    const auto& block = avl_history[i];
-    const auto& node = block.data;
-    
-    std::cout << "Index [" << i << "] "
-              << "BlockID: " << block.header.block_id 
-              << " | Leaf: " << block.header.leaf_label
-              << " | " << (block.header.is_null ? "NULL_BLOCK" : "VALID") 
-              << "\n";
-
-    if (!block.header.is_null) {
-        std::cout << "  Key: " << node.key << " | Val: " << node.value << "\n";
-        
-        std::cout << "  L_Child: " 
-                  << (node.l_child_ptr.is_null ? "NULL" : std::to_string(node.l_child_ptr.block_id))
-                  << " (Leaf: " << node.l_child_ptr.leaf_label << ")"
-                  << " | Height: " << (int)node.l_height << "\n";
-                  
-        std::cout << "  R_Child: " 
-                  << (node.r_child_ptr.is_null ? "NULL" : std::to_string(node.r_child_ptr.block_id))
-                  << " (Leaf: " << node.r_child_ptr.leaf_label << ")"
-                  << " | Height: " << (int)node.r_height << "\n";
-    }
-    std::cout << "--------------------------------------\n";
-}
-// --- DEBUG PRINT END ---
-
+    // Reverse traverse and update heights and rebalance the tree
     for (int height = 1; height < avl_history.size(); height++) {
         int cur_node_index = avl_history.size() - 1 - height;
         
@@ -233,6 +203,8 @@ for (size_t i = 0; i < avl_history.size(); i++) {
             }
         }
     }
+
+    // Write back to PathORAM in reverse order, updating new leaf references
     for (int index = avl_history.size() - 1; index >= 0; index--) { 
         uint32_t new_leaf_label = write_block(avl_history[index], true).header.leaf_label;
         
