@@ -38,10 +38,10 @@ struct ORAMBlock {
 class Client {
 public:
     Client(size_t num_blocks, size_t blocks_per_bucket);
-    void write_data(uint64_t key, uint64_t value);
-    ORAMBlock write_block(ORAMBlock to_write, bool write);
+    void insert(uint64_t key, uint64_t value);
 
 private:
+    ORAMBlock write_block(ORAMBlock to_write, bool write);
     size_t block_size_bytes = sizeof(ORAMBlock);
     ODSPointer root;
     size_t num_blocks;

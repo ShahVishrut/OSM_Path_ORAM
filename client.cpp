@@ -36,7 +36,7 @@ Client::Client(size_t num_blocks, size_t blocks_per_bucket) {
 }
 
 
-void Client::write_data(uint64_t key, uint64_t value) {
+void Client::insert(uint64_t key, uint64_t value) {
     if (root.is_null) {
         ORAMBlock to_write;
         to_write.header.block_id = next_available_block_id();
