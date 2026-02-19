@@ -27,7 +27,19 @@ struct OSMNode {
     uint32_t l_same_key_size;
     uint32_t r_same_key_size;
 
-    OSMNode() : key(0), value(0), l_height(0), r_height(0), l_same_key_size(0), r_same_key_size(0) {}
+    uint64_t l_max_key_subtree;
+    uint32_t l_max_key_count;
+
+    uint64_t l_min_key_subtree;
+    uint32_t l_min_key_count;
+
+    uint64_t r_max_key_subtree;
+    uint32_t r_max_key_count;
+
+    uint64_t r_min_key_subtree;
+    uint32_t r_min_key_count;
+
+    OSMNode() : key(0), value(0), l_height(0), r_height(0), l_same_key_size(0), r_same_key_size(0), l_max_key_subtree(0), l_max_key_count(0), l_min_key_subtree(0), l_min_key_count(0), r_max_key_subtree(0), r_max_key_count(0), r_min_key_count(0), r_min_key_subtree(0) {}
 };
 
 struct ORAMBlock {
@@ -56,6 +68,10 @@ private:
     void read_block_path(uint32_t leaf_num);
     uint32_t next_available_block_id();
     uint32_t cur_block_id = 0;
+    void rotate_right_right(std::vector<ORAMBlock>& avl_history, int cur_node_index);
+    void rotate_left_left(std::vector<ORAMBlock>& avl_history, int cur_node_index);
+    void rotate_right_left(std::vector<ORAMBlock>& avl_history, int cur_node_index);
+    void rotate_left_right(std::vector<ORAMBlock>& avl_history, int cur_node_index);
 };
 
 #endif
