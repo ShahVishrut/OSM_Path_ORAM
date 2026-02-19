@@ -188,7 +188,7 @@ void Client::insert(uint64_t key, uint64_t value) {
   }
 }
 
-void Client::rotate_right_right(std::vector<ORAMBlock> &avl_history,
+void Client::rotate_right_right(std::vector<ORAMBlock>& avl_history,
                                 int cur_node_index) {
   avl_history[cur_node_index].data.r_child_ptr =
       avl_history[cur_node_index + 1].data.l_child_ptr;
@@ -315,7 +315,7 @@ void Client::rotate_right_right(std::vector<ORAMBlock> &avl_history,
   }
 }
 
-void Client::rotate_left_left(std::vector<ORAMBlock> &avl_history,
+void Client::rotate_left_left(std::vector<ORAMBlock>& avl_history,
                               int cur_node_index) {
   // 1. A (old root) adopts B's right child as its new left child
   avl_history[cur_node_index].data.l_child_ptr =
@@ -439,7 +439,7 @@ void Client::rotate_left_left(std::vector<ORAMBlock> &avl_history,
   }
 }
 
-void Client::rotate_right_left(std::vector<ORAMBlock> &avl_history,
+void Client::rotate_right_left(std::vector<ORAMBlock>& avl_history,
                                int cur_node_index) {
   avl_history[cur_node_index].data.r_child_ptr =
       avl_history[cur_node_index + 2].data.l_child_ptr;
@@ -646,7 +646,7 @@ void Client::rotate_right_left(std::vector<ORAMBlock> &avl_history,
   }
 }
 
-void Client::rotate_left_right(std::vector<ORAMBlock> &avl_history,
+void Client::rotate_left_right(std::vector<ORAMBlock>& avl_history,
                                int cur_node_index) {
   // 1. A (cur_node_index) adopts C's right child as its new left child
   avl_history[cur_node_index].data.l_child_ptr =
