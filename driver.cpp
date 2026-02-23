@@ -10,5 +10,7 @@ int main() {
     my_client->insert(40, 984);
     my_client->insert(45, 982);
     my_client->insert(5, 981);
-    my_client->insert(42, 9889);
+    my_client->insert(50, 67);
+
+    std::cout << my_client->size(10);
 }

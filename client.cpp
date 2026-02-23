@@ -34,6 +34,34 @@ Client::Client(size_t num_blocks, size_t blocks_per_bucket) {
   }
 }
 
+size_t Client::size(uint64_t key) {
+  if (root.is_null) {
+    return 0;
+  }
+
+  ORAMBlock cur_read;
+  cur_read.header = root;
+
+  while (true) {
+    cur_read = write_block(cur_read, false);
+    if (key > cur_read.data.key) {
+      if (cur_read.data.r_child_ptr.is_null) {
+        return 0;
+      } else {
+        cur_read.header = cur_read.data.r_child_ptr;
+      }
+    } else if (key < cur_read.data.key) {
+      if (cur_read.data.l_child_ptr.is_null) {
+        return 0;
+      } else {
+        cur_read.header = cur_read.data.l_child_ptr;
+      }
+    } else {
+      return 1 + cur_read.data.l_same_key_size + cur_read.data.r_same_key_size;
+    }
+  }
+}
+
 void Client::insert(uint64_t key, uint64_t value) {
   if (root.is_null) {
     ORAMBlock to_write;
@@ -49,6 +77,7 @@ void Client::insert(uint64_t key, uint64_t value) {
 
   ORAMBlock cur_read;
   cur_read.header = root;
+  bool duplicate = false;
 
   // Read AVL tree path from PathORAM and add new Node to end
   while (true) {
@@ -86,11 +115,17 @@ void Client::insert(uint64_t key, uint64_t value) {
         cur_read.header = cur_read.data.l_child_ptr;
       }
     } else {
+      duplicate = true;
+      if (!cur_read.data.l_child_ptr.is_null) {
+        cur_read.header = cur_read.data.l_child_ptr;
+      } else {
+        break;
+      }
     }
   }
 
   // Reverse traverse and update heights and rebalance the tree
-  for (int height = 1; height < avl_history.size(); height++) {
+  for (int height = 1; !duplicate && height < avl_history.size(); height++) {
     int cur_node_index = avl_history.size() - 1 - height;
 
     if (!avl_history[cur_node_index].data.r_child_ptr.is_null &&

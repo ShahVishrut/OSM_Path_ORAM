@@ -51,6 +51,7 @@ class Client {
 public:
     Client(size_t num_blocks, size_t blocks_per_bucket);
     void insert(uint64_t key, uint64_t value);
+    size_t size(uint64_t key);
 
 private:
     ORAMBlock write_block(ORAMBlock to_write, bool write);
