@@ -62,6 +62,116 @@ size_t Client::size(uint64_t key) {
   }
 }
 
+std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
+  if (root.is_null) {
+    return {};
+  }
+
+  std::vector<ORAMBlock> path_to_i;
+
+  ORAMBlock cur_read;
+  cur_read.header = root;
+  uint32_t recursive_i = i;
+
+  while (true) {
+    cur_read = write_block(cur_read, false);
+    path_to_i.push_back(cur_read);
+
+    if (key > cur_read.data.key) {
+      if (cur_read.data.r_child_ptr.is_null) {
+        return {};
+      } else {
+        cur_read.header = cur_read.data.r_child_ptr;
+      }
+    } else if (key < cur_read.data.key) {
+      if (cur_read.data.l_child_ptr.is_null) {
+        return {};
+      } else {
+        cur_read.header = cur_read.data.l_child_ptr;
+      }
+    } else {
+      if (cur_read.data.l_same_key_size == recursive_i) {
+        break;
+      } else if (cur_read.data.l_same_key_size > recursive_i) {
+        cur_read.header = cur_read.data.l_child_ptr;
+      } else {
+        cur_read.header = cur_read.data.r_child_ptr;
+        recursive_i -= cur_read.data.l_same_key_size + 1;
+      }
+    }
+  }
+
+  // Write back to PathORAM in reverse order, updating new leaf references
+  for (int index = path_to_i.size() - 1; index >= 0; index--) {
+    uint32_t new_leaf_label =
+        write_block(path_to_i[index], true).header.leaf_label;
+
+    if (index > 0 && !path_to_i[index - 1].data.l_child_ptr.is_null &&
+        path_to_i[index - 1].data.l_child_ptr.block_id ==
+            path_to_i[index].header.block_id) {
+      path_to_i[index - 1].data.l_child_ptr.leaf_label = new_leaf_label;
+    } else if (index > 0 && !path_to_i[index - 1].data.r_child_ptr.is_null &&
+               path_to_i[index - 1].data.r_child_ptr.block_id ==
+                   path_to_i[index].header.block_id) {
+      path_to_i[index - 1].data.r_child_ptr.leaf_label = new_leaf_label;
+    } else if (index == 0) {
+      root.leaf_label = new_leaf_label;
+    }
+  }
+
+  std::vector<ORAMBlock> path_to_j;
+
+  ORAMBlock cur_read;
+  cur_read.header = root;
+  uint32_t recursive_j = j;
+
+  while (true) {
+    cur_read = write_block(cur_read, false);
+    path_to_j.push_back(cur_read);
+
+    if (key > cur_read.data.key) {
+      if (cur_read.data.r_child_ptr.is_null) {
+        return {};
+      } else {
+        cur_read.header = cur_read.data.r_child_ptr;
+      }
+    } else if (key < cur_read.data.key) {
+      if (cur_read.data.l_child_ptr.is_null) {
+        return {};
+      } else {
+        cur_read.header = cur_read.data.l_child_ptr;
+      }
+    } else {
+      if (cur_read.data.l_same_key_size == recursive_j) {
+        break;
+      } else if (cur_read.data.l_same_key_size > recursive_j) {
+        cur_read.header = cur_read.data.l_child_ptr;
+      } else {
+        cur_read.header = cur_read.data.r_child_ptr;
+        recursive_j -= cur_read.data.l_same_key_size + 1;
+      }
+    }
+  }
+
+  // Write back to PathORAM in reverse order, updating new leaf references
+  for (int index = path_to_j.size() - 1; index >= 0; index--) {
+    uint32_t new_leaf_label =
+        write_block(path_to_j[index], true).header.leaf_label;
+
+    if (index > 0 && !path_to_j[index - 1].data.l_child_ptr.is_null &&
+        path_to_j[index - 1].data.l_child_ptr.block_id ==
+            path_to_j[index].header.block_id) {
+      path_to_j[index - 1].data.l_child_ptr.leaf_label = new_leaf_label;
+    } else if (index > 0 && !path_to_j[index - 1].data.r_child_ptr.is_null &&
+               path_to_j[index - 1].data.r_child_ptr.block_id ==
+                   path_to_j[index].header.block_id) {
+      path_to_j[index - 1].data.r_child_ptr.leaf_label = new_leaf_label;
+    } else if (index == 0) {
+      root.leaf_label = new_leaf_label;
+    }
+  }
+}
+
 void Client::insert(uint64_t key, uint64_t value) {
   if (root.is_null) {
     ORAMBlock to_write;

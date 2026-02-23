@@ -52,6 +52,7 @@ public:
     Client(size_t num_blocks, size_t blocks_per_bucket);
     void insert(uint64_t key, uint64_t value);
     size_t size(uint64_t key);
+    std::vector<uint64_t> find(uint64_t key, uint32_t i, uint32_t j);
 
 private:
     ORAMBlock write_block(ORAMBlock to_write, bool write);
