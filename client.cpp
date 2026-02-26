@@ -80,12 +80,9 @@ size_t Client::size(uint64_t key) {
 }
 
 std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
-  if (root.is_null) {
-    return {};
-  }
+  if (root.is_null) return {};
 
   std::vector<ORAMBlock> common_path;
-
   ORAMBlock cur_read;
   cur_read.header = root;
 
@@ -94,6 +91,7 @@ std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
 
   bool found_i = false;
   bool found_j = false;
+  bool abort_search = false;
 
   ODSPointer next_header_i;
   ODSPointer next_header_j;
@@ -108,19 +106,19 @@ std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
 
     // Determine next step for i
     if (key > cur_read.data.key) {
-      if (cur_read.data.r_child_ptr.is_null) return {}; // Abort if missing
+      if (cur_read.data.r_child_ptr.is_null) { abort_search = true; break; }
       next_header_i = cur_read.data.r_child_ptr;
     } else if (key < cur_read.data.key) {
-      if (cur_read.data.l_child_ptr.is_null) return {}; // Abort if missing
+      if (cur_read.data.l_child_ptr.is_null) { abort_search = true; break; }
       next_header_i = cur_read.data.l_child_ptr;
     } else {
       if (cur_read.data.l_same_key_size == recursive_i) {
         found_i = true;
       } else if (cur_read.data.l_same_key_size > recursive_i) {
-        if (cur_read.data.l_child_ptr.is_null) return {}; // Abort if missing
+        if (cur_read.data.l_child_ptr.is_null) { abort_search = true; break; }
         next_header_i = cur_read.data.l_child_ptr;
       } else {
-        if (cur_read.data.r_child_ptr.is_null) return {}; // Abort if missing
+        if (cur_read.data.r_child_ptr.is_null) { abort_search = true; break; }
         next_header_i = cur_read.data.r_child_ptr;
         next_recursive_i = recursive_i - (cur_read.data.l_same_key_size + 1);
       }
@@ -128,19 +126,19 @@ std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
 
     // Determine next step for j
     if (key > cur_read.data.key) {
-      if (cur_read.data.r_child_ptr.is_null) return {}; // Abort if missing
+      if (cur_read.data.r_child_ptr.is_null) { abort_search = true; break; }
       next_header_j = cur_read.data.r_child_ptr;
     } else if (key < cur_read.data.key) {
-      if (cur_read.data.l_child_ptr.is_null) return {}; // Abort if missing
+      if (cur_read.data.l_child_ptr.is_null) { abort_search = true; break; }
       next_header_j = cur_read.data.l_child_ptr;
     } else {
       if (cur_read.data.l_same_key_size == recursive_j) {
         found_j = true;
       } else if (cur_read.data.l_same_key_size > recursive_j) {
-        if (cur_read.data.l_child_ptr.is_null) return {}; // Abort if missing
+        if (cur_read.data.l_child_ptr.is_null) { abort_search = true; break; }
         next_header_j = cur_read.data.l_child_ptr;
       } else {
-        if (cur_read.data.r_child_ptr.is_null) return {}; // Abort if missing
+        if (cur_read.data.r_child_ptr.is_null) { abort_search = true; break; }
         next_header_j = cur_read.data.r_child_ptr;
         next_recursive_j = recursive_j - (cur_read.data.l_same_key_size + 1);
       }
@@ -152,7 +150,6 @@ std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
       recursive_i = next_recursive_i;
       recursive_j = next_recursive_j;
     } else {
-      // Paths have diverged, or one has reached its destination
       break; 
     }
   }
@@ -162,145 +159,127 @@ std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
   std::vector<ORAMBlock> right_bfs;
   std::vector<ORAMBlock> full_bfs;
 
-  std::vector<uint32_t> i_values;
-  std::vector<uint32_t> j_values;
+  // Only run BFS logic if the nodes were actually found
+  if (!abort_search) {
+    std::vector<uint32_t> i_values;
+    std::vector<uint32_t> j_values;
 
-  // The common ancestor is where the paths diverged
-  ORAMBlock divergence_node = common_path.back();
+    ORAMBlock divergence_node = common_path.back();
 
-  // Evaluate the divergence node
-  if (divergence_node.data.key == key) {
-    if (divergence_node.data.l_same_key_size >= recursive_i && 
-        divergence_node.data.l_same_key_size <= recursive_j) {
-      result.push_back(divergence_node.data.value);
-    }
-    
-    // Seed the left path BFS
-    if (!divergence_node.data.l_child_ptr.is_null) {
-      cur_read.header = divergence_node.data.l_child_ptr;
-      left_bfs.push_back(write_block(cur_read, false));
-      i_values.push_back(recursive_i);
-    }
-    
-    // Seed the right path BFS
-    if (!divergence_node.data.r_child_ptr.is_null) {
-      cur_read.header = divergence_node.data.r_child_ptr;
-      right_bfs.push_back(write_block(cur_read, false));
-      j_values.push_back(recursive_j - (divergence_node.data.l_same_key_size + 1));
-    }
-  }
-
-  // 1. Process Left Path BFS
-  size_t left_idx = 0;
-  while (left_idx < left_bfs.size()) {
-    ORAMBlock node = left_bfs[left_idx];
-    uint32_t target_i = i_values[left_idx];
-    left_idx++;
-
-    if (node.data.key != key) {
-      // Must be < key. Route right to get back to the matching keys.
-      if (!node.data.r_child_ptr.is_null) {
-        cur_read.header = node.data.r_child_ptr;
-        left_bfs.push_back(write_block(cur_read, false));
-        i_values.push_back(target_i);
+    if (divergence_node.data.key == key) {
+      if (divergence_node.data.l_same_key_size >= recursive_i && 
+          divergence_node.data.l_same_key_size <= recursive_j) {
+        result.push_back(divergence_node.data.value);
       }
-      continue;
-    }
-
-    uint32_t L = node.data.l_same_key_size;
-
-    if (L < target_i) {
-      // Current node is less than I. Only take the right subtree in BFS.
-      if (!node.data.r_child_ptr.is_null) {
-        cur_read.header = node.data.r_child_ptr;
-        left_bfs.push_back(write_block(cur_read, false));
-        i_values.push_back(target_i - (L + 1));
-      }
-    } else {
-      // Current node is greater than or equal to I. Add current, add left to left_bfs, 
-      // and take EVERYTHING from the right.
-      result.push_back(node.data.value);
       
-      if (!node.data.l_child_ptr.is_null) {
-        cur_read.header = node.data.l_child_ptr;
+      if (!divergence_node.data.l_child_ptr.is_null) {
+        cur_read.header = divergence_node.data.l_child_ptr;
         left_bfs.push_back(write_block(cur_read, false));
-        i_values.push_back(target_i);
+        i_values.push_back(recursive_i);
       }
-      if (!node.data.r_child_ptr.is_null) {
-        cur_read.header = node.data.r_child_ptr;
-        full_bfs.push_back(write_block(cur_read, false));
-      }
-    }
-  }
-
-  // 2. Process Right Path BFS
-  size_t right_idx = 0;
-  while (right_idx < right_bfs.size()) {
-    ORAMBlock node = right_bfs[right_idx];
-    uint32_t target_j = j_values[right_idx];
-    right_idx++;
-
-    if (node.data.key != key) {
-      // Must be > key. Route left to get back to the matching keys.
-      if (!node.data.l_child_ptr.is_null) {
-        cur_read.header = node.data.l_child_ptr;
-        right_bfs.push_back(write_block(cur_read, false));
-        j_values.push_back(target_j);
-      }
-      continue;
-    }
-
-    uint32_t L = node.data.l_same_key_size;
-
-    if (L > target_j) {
-      // Current node is greater than J. Only take the left subtree.
-      if (!node.data.l_child_ptr.is_null) {
-        cur_read.header = node.data.l_child_ptr;
-        right_bfs.push_back(write_block(cur_read, false));
-        j_values.push_back(target_j);
-      }
-    } else {
-      // Current node is less than or equal to J. Add current, take EVERYTHING from left, 
-      // and add right to right_bfs.
-      result.push_back(node.data.value);
       
-      if (!node.data.l_child_ptr.is_null) {
-        cur_read.header = node.data.l_child_ptr;
-        full_bfs.push_back(write_block(cur_read, false));
-      }
-      if (!node.data.r_child_ptr.is_null) {
-        cur_read.header = node.data.r_child_ptr;
+      if (!divergence_node.data.r_child_ptr.is_null && divergence_node.data.l_same_key_size < recursive_j) {
+        cur_read.header = divergence_node.data.r_child_ptr;
         right_bfs.push_back(write_block(cur_read, false));
-        j_values.push_back(target_j - (L + 1));
+        j_values.push_back(recursive_j - (divergence_node.data.l_same_key_size + 1));
       }
     }
-  }
 
-  // 3. Process Full Subtree BFS
-  size_t full_idx = 0;
-  while (full_idx < full_bfs.size()) {
-    ORAMBlock node = full_bfs[full_idx];
-    full_idx++;
+    // 1. Process Left Path BFS
+    size_t left_idx = 0;
+    while (left_idx < left_bfs.size()) {
+      ORAMBlock node = left_bfs[left_idx];
+      uint32_t target_i = i_values[left_idx];
+      left_idx++;
 
-    // Since these are "inner" subtrees bounded by keys of the same value, 
-    // every node here is mathematically guaranteed to match `key`.
-    if (node.data.key == key) {
-      result.push_back(node.data.value);
-      
-      if (!node.data.l_child_ptr.is_null) {
-        cur_read.header = node.data.l_child_ptr;
-        full_bfs.push_back(write_block(cur_read, false));
+      if (node.data.key != key) {
+        if (!node.data.r_child_ptr.is_null) {
+          cur_read.header = node.data.r_child_ptr;
+          left_bfs.push_back(write_block(cur_read, false));
+          i_values.push_back(target_i);
+        }
+        continue;
       }
-      if (!node.data.r_child_ptr.is_null) {
-        cur_read.header = node.data.r_child_ptr;
-        full_bfs.push_back(write_block(cur_read, false));
+
+      uint32_t L = node.data.l_same_key_size;
+      if (L < target_i) {
+        if (!node.data.r_child_ptr.is_null) {
+          cur_read.header = node.data.r_child_ptr;
+          left_bfs.push_back(write_block(cur_read, false));
+          i_values.push_back(target_i - (L + 1));
+        }
+      } else {
+        result.push_back(node.data.value);
+        if (!node.data.l_child_ptr.is_null) {
+          cur_read.header = node.data.l_child_ptr;
+          left_bfs.push_back(write_block(cur_read, false));
+          i_values.push_back(target_i);
+        }
+        if (!node.data.r_child_ptr.is_null) {
+          cur_read.header = node.data.r_child_ptr;
+          full_bfs.push_back(write_block(cur_read, false));
+        }
+      }
+    }
+
+    // 2. Process Right Path BFS
+    size_t right_idx = 0;
+    while (right_idx < right_bfs.size()) {
+      ORAMBlock node = right_bfs[right_idx];
+      uint32_t target_j = j_values[right_idx];
+      right_idx++;
+
+      if (node.data.key != key) {
+        if (!node.data.l_child_ptr.is_null) {
+          cur_read.header = node.data.l_child_ptr;
+          right_bfs.push_back(write_block(cur_read, false));
+          j_values.push_back(target_j);
+        }
+        continue;
+      }
+
+      uint32_t L = node.data.l_same_key_size;
+      if (L > target_j) {
+        if (!node.data.l_child_ptr.is_null) {
+          cur_read.header = node.data.l_child_ptr;
+          right_bfs.push_back(write_block(cur_read, false));
+          j_values.push_back(target_j);
+        }
+      } else {
+        result.push_back(node.data.value);
+        if (!node.data.l_child_ptr.is_null) {
+          cur_read.header = node.data.l_child_ptr;
+          full_bfs.push_back(write_block(cur_read, false));
+        }
+        if (L < target_j && !node.data.r_child_ptr.is_null) {
+          cur_read.header = node.data.r_child_ptr;
+          right_bfs.push_back(write_block(cur_read, false));
+          j_values.push_back(target_j - (L + 1));
+        }
+      }
+    }
+
+    // 3. Process Full Subtree BFS
+    size_t full_idx = 0;
+    while (full_idx < full_bfs.size()) {
+      ORAMBlock node = full_bfs[full_idx];
+      full_idx++;
+
+      if (node.data.key == key) {
+        result.push_back(node.data.value);
+        if (!node.data.l_child_ptr.is_null) {
+          cur_read.header = node.data.l_child_ptr;
+          full_bfs.push_back(write_block(cur_read, false));
+        }
+        if (!node.data.r_child_ptr.is_null) {
+          cur_read.header = node.data.r_child_ptr;
+          full_bfs.push_back(write_block(cur_read, false));
+        }
       }
     }
   }
 
   // --- Write-back logic ---
-
-  // Helper lambda to search a specific vector and update the parent's pointer
   auto check_and_update = [](std::vector<ORAMBlock>& vec, uint32_t child_block_id, uint32_t new_leaf_label) {
     for (auto& p : vec) {
       if (!p.data.l_child_ptr.is_null && p.data.l_child_ptr.block_id == child_block_id) {
@@ -315,40 +294,30 @@ std::vector<uint64_t> Client::find(uint64_t key, uint32_t i, uint32_t j) {
     return false;
   };
 
-  // 1. Write back full_bfs
-  // Parents can be in full_bfs, left_bfs, or right_bfs
   for (int idx = (int)full_bfs.size() - 1; idx >= 0; idx--) {
     uint32_t new_leaf = write_block(full_bfs[idx], true).header.leaf_label;
     uint32_t cid = full_bfs[idx].header.block_id;
-    
     if (check_and_update(full_bfs, cid, new_leaf)) continue;
     if (check_and_update(left_bfs, cid, new_leaf)) continue;
     check_and_update(right_bfs, cid, new_leaf);
   }
 
-  // 2. Write back right_bfs
-  // Parents are STRICTLY in right_bfs or the divergence node (last element of common_path)
   for (int idx = (int)right_bfs.size() - 1; idx >= 0; idx--) {
     uint32_t new_leaf = write_block(right_bfs[idx], true).header.leaf_label;
     uint32_t cid = right_bfs[idx].header.block_id;
-    
     if (!check_and_update(right_bfs, cid, new_leaf)) {
       check_and_update(common_path, cid, new_leaf);
     }
   }
 
-  // 3. Write back left_bfs
-  // Parents are STRICTLY in left_bfs or the divergence node (last element of common_path)
   for (int idx = (int)left_bfs.size() - 1; idx >= 0; idx--) {
     uint32_t new_leaf = write_block(left_bfs[idx], true).header.leaf_label;
     uint32_t cid = left_bfs[idx].header.block_id;
-    
     if (!check_and_update(left_bfs, cid, new_leaf)) {
       check_and_update(common_path, cid, new_leaf);
     }
   }
   
-  // 4. Finish writing back the initial common trunk
   for (int idx = (int)common_path.size() - 1; idx >= 0; idx--) {
     uint32_t new_leaf = write_block(common_path[idx], true).header.leaf_label;
     if (idx > 0) {
